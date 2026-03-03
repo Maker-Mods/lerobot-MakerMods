@@ -116,13 +116,16 @@ export function CamerasStep() {
       tempStream.getTracks().forEach((t) => t.stop());
 
       const devices = await navigator.mediaDevices.enumerateDevices();
+      // Assign opencvIndex BEFORE filtering so built-in cameras don't shift
+      // the numbering — OpenCV indexes all cameras (including built-ins) from 0.
       const cameras = devices
         .filter((d) => d.kind === "videoinput")
-        .filter((d) => isExternalCamera(d.label))
-        .map((d) => ({
+        .map((d, i) => ({
           deviceId: d.deviceId,
           label: d.label || `Camera ${d.deviceId.slice(0, 8)}`,
-        }));
+          opencvIndex: i,
+        }))
+        .filter((d) => isExternalCamera(d.label));
 
       dispatch({ type: "SET_DETECTED_CAMERAS", cameras });
     } catch (err) {

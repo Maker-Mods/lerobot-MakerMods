@@ -156,6 +156,7 @@ function reducer(state: WizardState, action: Action): WizardState {
           label: c.label,
           name: "",
           included: false,
+          opencvIndex: c.opencvIndex,
         })),
       };
       break;

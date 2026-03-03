@@ -161,14 +161,11 @@ export const services = {
   saveConfig: async (state: WizardState): Promise<void> => {
     if (USE_MOCK) return;
     const mode = state.robotMode === "bimanual" ? "bimanual" : "single";
-    // Use the original detection index (position in cameraSelections) as the
-    // OpenCV camera index, so excluded cameras don't shift the numbering.
+    // Use the stored opencvIndex (position in the full unfiltered videoinput list)
+    // so built-in cameras don't shift the numbering for external cameras.
     const cameras = state.cameraSelections
-      .flatMap((c, i) =>
-        c.included
-          ? [{ index: i, name: c.name, width: 640, height: 480, fps: 30 }]
-          : []
-      );
+      .filter((c) => c.included)
+      .map((c) => ({ index: c.opencvIndex, name: c.name, width: 640, height: 480, fps: 30 }));
     // Strip .json extension from calibration file names to get the ID
     const calId = (file: string | null | undefined) =>
       file && file !== "new" ? file.replace(/\.json$/, "") : null;
