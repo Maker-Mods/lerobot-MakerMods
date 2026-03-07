@@ -58,7 +58,15 @@ export const services = {
       const mock = await import("./mock-data");
       return mock.cameras;
     }
-    return fetchAPI<CameraInfo[]>("/api/setup/cameras?exclude_builtin=true");
+    // Backend returns { index, name, backend, is_builtin } from OpenCV detection.
+    // All cameras are returned — the user identifies them via MJPEG preview.
+    const raw = await fetchAPI<Array<{ index: number; name: string | null }>>(
+      "/api/setup/cameras",
+    );
+    return raw.map((cam) => ({
+      opencvIndex: cam.index,
+      label: cam.name || `Camera ${cam.index}`,
+    }));
   },
 
   listCalibrationFiles: async (
@@ -165,7 +173,13 @@ export const services = {
     // so built-in cameras don't shift the numbering for external cameras.
     const cameras = state.cameraSelections
       .filter((c) => c.included)
-      .map((c) => ({ index: c.opencvIndex, name: c.name, width: 640, height: 480, fps: 30 }));
+      .map((c) => ({
+        index: c.opencvIndex,
+        name: c.name,
+        width: state.recordingConfig.cameraWidth,
+        height: state.recordingConfig.cameraHeight,
+        fps: state.recordingConfig.cameraFps,
+      }));
     // Strip .json extension from calibration file names to get the ID
     const calId = (file: string | null | undefined) =>
       file && file !== "new" ? file.replace(/\.json$/, "") : null;
@@ -213,6 +227,11 @@ export const services = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ port }),
     });
+  },
+
+  stopCameraStreams: async (): Promise<void> => {
+    if (USE_MOCK) return;
+    await fetchAPI("/api/setup/cameras/streams/stop", { method: "POST" });
   },
 
   clearCache: async (repoId: string): Promise<void> => {

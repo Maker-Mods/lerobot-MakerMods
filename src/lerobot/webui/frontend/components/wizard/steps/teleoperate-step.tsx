@@ -37,7 +37,7 @@ export function TeleoperateStep() {
 
   const selectedCameraFeeds = state.cameraSelections
     .filter((c) => c.included && c.name)
-    .map((c) => ({ deviceId: c.deviceId, name: c.name }));
+    .map((c) => ({ opencvIndex: c.opencvIndex, name: c.name }));
 
   const { logs, isConnected, clearLogs } = useWebSocket(state.teleProcessId);
 
@@ -92,6 +92,8 @@ export function TeleoperateStep() {
     setShowLogs(false);
     try {
       await services.saveConfig(state);
+      // Release any MJPEG camera streams so the subprocess can access them
+      await services.stopCameraStreams().catch(() => {});
       const res = await services.startTeleoperation(false);
       dispatch({ type: "SET_TELE_PROCESS_ID", id: res.process_id });
       setTeleState("running");
@@ -167,19 +169,24 @@ export function TeleoperateStep() {
 
         <Separator />
 
-        {/* Camera feed toggle — always available if cameras were selected */}
-        {selectedCameraFeeds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Switch
-              id="show-cameras"
-              checked={showCameras}
-              onCheckedChange={setShowCameras}
-            />
-            <Label htmlFor="show-cameras" className="text-sm cursor-pointer">
-              Show camera feeds
-            </Label>
-          </div>
-        )}
+        {/* Camera feed toggle — disabled when no cameras are selected */}
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-cameras"
+            checked={showCameras}
+            onCheckedChange={setShowCameras}
+            disabled={selectedCameraFeeds.length === 0}
+          />
+          <Label
+            htmlFor="show-cameras"
+            className={`text-sm ${selectedCameraFeeds.length === 0 ? "text-muted-foreground" : "cursor-pointer"}`}
+          >
+            Show camera feeds
+            {selectedCameraFeeds.length === 0 && (
+              <span className="text-xs ml-1.5">(no cameras selected)</span>
+            )}
+          </Label>
+        </div>
 
         {showCameras && <CameraFeedPanel cameras={selectedCameraFeeds} />}
 

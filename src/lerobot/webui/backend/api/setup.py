@@ -35,7 +35,7 @@ def _get_error_hint(e: Exception) -> Optional[str]:
     if "missing motor ids" in msg or "motor check failed" in msg:
         return "Motor not found on this port. Select a different port or check that the correct arm is connected and powered on."
     if "no status packet" in msg or "txrxresult" in msg:
-        return "USB communication failed. Try re-plugging the cable and scanning ports again."
+        return "This error usually means the arm is not powered on. Make sure the motor power supply is connected and switched on, then try again."
     if "could not open port" in msg or "serialexception" in msg or "permission denied" in msg:
         return "Port unavailable — it may already be in use by another process."
     return None
@@ -58,6 +58,9 @@ async def list_cameras(exclude_builtin: bool = False):
         exclude_builtin: If True, exclude built-in cameras (macOS only).
     """
     try:
+        # Stop any active MJPEG streams first — the scan opens cv2.VideoCapture
+        # for each index, which conflicts with streams in the same process.
+        _stop_all_streams()
         return camera_scanner.list_cameras(exclude_builtin=exclude_builtin)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list cameras: {e}")
@@ -200,6 +203,31 @@ def _get_camera_stream(index: int) -> _CameraStream:
         if index not in _camera_streams:
             _camera_streams[index] = _CameraStream(index)
         return _camera_streams[index]
+
+
+def _stop_all_streams() -> None:
+    """Stop all active MJPEG streams and wait for capture threads to release cameras."""
+    threads: list[threading.Thread] = []
+    with _streams_lock:
+        for stream in _camera_streams.values():
+            stream._running = False
+            if stream._thread is not None:
+                threads.append(stream._thread)
+        _camera_streams.clear()
+    # Wait for capture threads to fully exit and release cameras
+    for t in threads:
+        t.join(timeout=3)
+
+
+@router.post("/cameras/streams/stop")
+async def stop_all_camera_streams():
+    """Stop all active MJPEG camera streams.
+
+    Must be called before starting recording or teleoperation so the subprocess
+    can access the cameras without conflict.
+    """
+    await asyncio.to_thread(_stop_all_streams)
+    return {"message": "All camera streams stopped"}
 
 
 @router.get("/cameras/stream/{camera_index}")

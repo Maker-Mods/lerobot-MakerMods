@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -20,6 +21,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { LogViewer } from "@/components/common/log-viewer";
 import {
@@ -192,6 +200,7 @@ export function RecordStep() {
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [repoIdWarning, setRepoIdWarning] = useState(false);
   const priorComplete = allPriorStepsComplete(5);
@@ -211,7 +220,7 @@ export function RecordStep() {
   );
   const selectedCameraFeeds = state.cameraSelections
     .filter((c) => c.included && c.name)
-    .map((c) => ({ deviceId: c.deviceId, name: c.name }));
+    .map((c) => ({ opencvIndex: c.opencvIndex, name: c.name }));
 
   // Process crash polling
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -278,6 +287,10 @@ export function RecordStep() {
     setErrorMsg(null);
     setShowLogs(false);
     try {
+      // Save current wizard state (ports, cameras, calibration) to backend config
+      await services.saveConfig(state);
+      // Release any MJPEG camera streams so the recording subprocess can access them
+      await services.stopCameraStreams().catch(() => {});
       // Clear cached data so the new recording replaces any previous dataset
       if (config.repoId.trim()) {
         await services.clearCache(config.repoId.trim()).catch(() => {});
@@ -416,6 +429,75 @@ export function RecordStep() {
               disabled={isRunning}
             />
             <Label htmlFor="display-data">Display data while recording</Label>
+          </div>
+
+          {/* Advanced settings (collapsible) */}
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex w-full items-center gap-2 p-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+            >
+              {showAdvanced ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <Camera className="h-4 w-4 text-muted-foreground" />
+              Advanced Settings
+              <span className="text-xs text-muted-foreground font-normal ml-1">
+                {config.cameraWidth}×{config.cameraHeight} @ {config.cameraFps}fps
+              </span>
+            </button>
+            {showAdvanced && (
+              <div className="space-y-3 border-t px-4 pb-4 pt-3">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="camera-fps">FPS</Label>
+                    <Select
+                      value={String(config.cameraFps)}
+                      onValueChange={(v) => updateConfig({ cameraFps: parseInt(v) })}
+                      disabled={isRunning}
+                    >
+                      <SelectTrigger id="camera-fps">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15</SelectItem>
+                        <SelectItem value="24">24</SelectItem>
+                        <SelectItem value="30">30 (recommended)</SelectItem>
+                        <SelectItem value="60">60</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="camera-resolution">Resolution</Label>
+                    <Select
+                      value={`${config.cameraWidth}x${config.cameraHeight}`}
+                      onValueChange={(v) => {
+                        const [w, h] = v.split("x").map(Number);
+                        updateConfig({ cameraWidth: w, cameraHeight: h });
+                      }}
+                      disabled={isRunning}
+                    >
+                      <SelectTrigger id="camera-resolution">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="320x240">320×240</SelectItem>
+                        <SelectItem value="640x480">640×480 (recommended)</SelectItem>
+                        <SelectItem value="1280x720">1280×720 (HD)</SelectItem>
+                        <SelectItem value="1920x1080">1920×1080 (Full HD)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Higher resolution and FPS produce better data but require more storage and processing power.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

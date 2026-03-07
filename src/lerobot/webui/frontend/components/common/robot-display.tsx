@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 
 // Regex to match motor position lines like "shoulder_pan.pos        |  12.45"
@@ -128,47 +128,16 @@ export function MotorPanel({
   );
 }
 
-/** Single camera feed using the browser getUserMedia API. */
-export function CameraFeed({ deviceId }: { deviceId: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function start() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error("Failed to open camera", deviceId, err);
-      }
-    }
-
-    start();
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, [deviceId]);
-
+/** Single camera feed via the backend MJPEG stream (same OpenCV source as recording). */
+export function CameraFeed({ opencvIndex }: { opencvIndex: number }) {
+  // Unique timestamp per mount forces the browser to open a fresh MJPEG connection
+  // (prevents showing a frozen last-frame from a previous stream).
+  const [ts] = useState(() => Date.now());
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/setup/cameras/stream/${opencvIndex}?t=${ts}`}
+      alt={`Camera ${opencvIndex}`}
       className="w-full rounded-lg"
     />
   );
@@ -178,7 +147,7 @@ export function CameraFeed({ deviceId }: { deviceId: string }) {
 export function CameraFeedPanel({
   cameras,
 }: {
-  cameras: { deviceId: string; name: string }[];
+  cameras: { opencvIndex: number; name: string }[];
 }) {
   if (cameras.length === 0) return null;
 
@@ -194,11 +163,11 @@ export function CameraFeedPanel({
       </div>
       <div className="space-y-3 p-3">
         {cameras.map((cam) => (
-          <div key={cam.deviceId} className="space-y-1.5">
+          <div key={cam.opencvIndex} className="space-y-1.5">
             <span className="text-xs text-muted-foreground font-medium">
               {cam.name}
             </span>
-            <CameraFeed deviceId={cam.deviceId} />
+            <CameraFeed opencvIndex={cam.opencvIndex} />
           </div>
         ))}
       </div>

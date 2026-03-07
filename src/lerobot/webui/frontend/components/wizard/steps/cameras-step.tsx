@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Loader2, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,68 +12,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CAMERA_NAME_OPTIONS } from "@/lib/wizard-types";
+import { services } from "@/lib/services";
 import { useWizard } from "../wizard-provider";
 import { StepCard } from "../step-card";
 
-/** Keywords that identify built-in / phone cameras to exclude */
-const BUILTIN_KEYWORDS = [
-  "facetime",
-  "built-in",
-  "macbook",
-  "iphone",
-  "ipad",
-  "continuity",
-  "ir camera",
-  "infrared",
-];
-
-function isExternalCamera(label: string): boolean {
-  const lower = label.toLowerCase();
-  return !BUILTIN_KEYWORDS.some((kw) => lower.includes(kw));
-}
-
-/** Live video feed for a single camera using getUserMedia */
-function CameraFeed({ deviceId }: { deviceId: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function start() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error("Failed to open camera", deviceId, err);
-      }
-    }
-
-    start();
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, [deviceId]);
-
+/** Live camera feed via the backend MJPEG stream (same OpenCV source as recording). */
+function CameraFeed({ opencvIndex }: { opencvIndex: number }) {
+  // Unique timestamp per mount forces a fresh MJPEG connection
+  const [ts] = useState(() => Date.now());
   return (
     <div className="border-t bg-muted/30 p-2">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/setup/cameras/stream/${opencvIndex}?t=${ts}`}
+        alt={`Camera ${opencvIndex}`}
         className="w-full rounded"
       />
     </div>
@@ -85,19 +37,16 @@ export function CamerasStep() {
   const [detecting, setDetecting] = useState(false);
 
   const selectedCameras = state.cameraSelections.filter((c) => c.included);
+  // Allow continuing with no cameras, but if any are selected they must be named
   const allNamed =
-    selectedCameras.length > 0 && selectedCameras.every((c) => c.name !== "");
+    selectedCameras.length === 0 || selectedCameras.every((c) => c.name !== "");
 
   // Names already used by other cameras
   const getUsedNames = useCallback(
-    (excludeDeviceId: string): Set<string> => {
+    (excludeIndex: number): Set<string> => {
       const used = new Set<string>();
       for (const cam of state.cameraSelections) {
-        if (
-          cam.deviceId !== excludeDeviceId &&
-          cam.included &&
-          cam.name
-        ) {
+        if (cam.opencvIndex !== excludeIndex && cam.included && cam.name) {
           used.add(cam.name);
         }
       }
@@ -109,24 +58,8 @@ export function CamerasStep() {
   async function detectCameras() {
     setDetecting(true);
     try {
-      // Request permission first (labels are empty without permission)
-      const tempStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-      });
-      tempStream.getTracks().forEach((t) => t.stop());
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      // Assign opencvIndex BEFORE filtering so built-in cameras don't shift
-      // the numbering — OpenCV indexes all cameras (including built-ins) from 0.
-      const cameras = devices
-        .filter((d) => d.kind === "videoinput")
-        .map((d, i) => ({
-          deviceId: d.deviceId,
-          label: d.label || `Camera ${d.deviceId.slice(0, 8)}`,
-          opencvIndex: i,
-        }))
-        .filter((d) => isExternalCamera(d.label));
-
+      // Use backend OpenCV detection — returns ground-truth camera indices
+      const cameras = await services.listCameras();
       dispatch({ type: "SET_DETECTED_CAMERAS", cameras });
     } catch (err) {
       console.error("Failed to detect cameras", err);
@@ -138,7 +71,7 @@ export function CamerasStep() {
   return (
     <StepCard
       title="Select Cameras"
-      description="Detect cameras and assign a name to each one you want to use. Toggle a camera on to see its live feed."
+      description="Detect cameras, toggle each on to see its live feed, then assign a name. Skip your built-in camera."
       nextDisabled={!allNamed}
     >
       <div className="space-y-6">
@@ -163,10 +96,10 @@ export function CamerasStep() {
               include:
             </p>
             {state.cameraSelections.map((cam) => {
-              const usedNames = getUsedNames(cam.deviceId);
+              const usedNames = getUsedNames(cam.opencvIndex);
               return (
                 <div
-                  key={cam.deviceId}
+                  key={cam.opencvIndex}
                   className="overflow-hidden rounded-lg border"
                 >
                   <div className="flex items-center gap-4 p-4">
@@ -175,7 +108,7 @@ export function CamerasStep() {
                       onCheckedChange={(checked) =>
                         dispatch({
                           type: "TOGGLE_CAMERA",
-                          deviceId: cam.deviceId,
+                          opencvIndex: cam.opencvIndex,
                           included: checked,
                         })
                       }
@@ -190,7 +123,7 @@ export function CamerasStep() {
                           onValueChange={(name) =>
                             dispatch({
                               type: "SET_CAMERA_NAME",
-                              deviceId: cam.deviceId,
+                              opencvIndex: cam.opencvIndex,
                               name,
                             })
                           }
@@ -211,7 +144,7 @@ export function CamerasStep() {
                       </div>
                     )}
                   </div>
-                  {cam.included && <CameraFeed deviceId={cam.deviceId} />}
+                  {cam.included && <CameraFeed opencvIndex={cam.opencvIndex} />}
                 </div>
               );
             })}

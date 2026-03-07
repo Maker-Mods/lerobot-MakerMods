@@ -30,8 +30,8 @@ type Action =
   | { type: "SET_PORT_ASSIGNMENT"; role: string; port: string }
   | { type: "SET_DETECTED_CAMERAS"; cameras: CameraInfo[] }
   | { type: "SET_CAMERA_SELECTIONS"; selections: CameraSelection[] }
-  | { type: "TOGGLE_CAMERA"; deviceId: string; included: boolean }
-  | { type: "SET_CAMERA_NAME"; deviceId: string; name: string }
+  | { type: "TOGGLE_CAMERA"; opencvIndex: number; included: boolean }
+  | { type: "SET_CAMERA_NAME"; opencvIndex: number; name: string }
   | { type: "SET_CALIBRATION_FILES"; key: string; files: string[] }
   | { type: "SET_CALIBRATION_SELECTION"; role: string; filename: string | null }
   | { type: "SET_NEW_CALIBRATION_NAME"; role: string; name: string }
@@ -57,9 +57,9 @@ function computeCompletedSteps(state: WizardState): boolean[] {
     );
   }
 
-  // Step 2: Cameras - at least 1 camera selected and named
+  // Step 2: Cameras - optional, but must visit the step first
   const selectedCameras = state.cameraSelections.filter((c) => c.included);
-  completed[2] = selectedCameras.length > 0 && selectedCameras.every((c) => c.name !== "");
+  completed[2] = state.camerasStepVisited && selectedCameras.every((c) => c.name !== "");
 
   // Step 3: Calibration - all roles have a selection
   if (state.robotMode) {
@@ -75,9 +75,9 @@ function computeCompletedSteps(state: WizardState): boolean[] {
     });
   }
 
-  // Steps 4-5: always completable (operational)
-  completed[4] = true;
-  completed[5] = true;
+  // Steps 4-5: complete once the user has visited them
+  completed[4] = state.teleStepVisited;
+  completed[5] = state.recordStepVisited;
 
   return completed;
 }
@@ -91,6 +91,7 @@ function resetStepsFrom(state: WizardState, fromStep: number): WizardState {
     s.portAssignments = {};
   }
   if (fromStep <= 2) {
+    s.camerasStepVisited = false;
     s.detectedCameras = [];
     s.cameraSelections = [];
   }
@@ -100,9 +101,11 @@ function resetStepsFrom(state: WizardState, fromStep: number): WizardState {
     s.newCalibrationNames = {};
   }
   if (fromStep <= 4) {
+    s.teleStepVisited = false;
     s.teleProcessId = null;
   }
   if (fromStep <= 5) {
+    s.recordStepVisited = false;
     s.recordingConfig = { ...INITIAL_RECORDING_CONFIG };
     s.recordProcessId = null;
   }
@@ -116,7 +119,13 @@ function reducer(state: WizardState, action: Action): WizardState {
 
   switch (action.type) {
     case "GO_TO_STEP":
-      next = { ...state, currentStep: action.step };
+      next = {
+        ...state,
+        currentStep: action.step,
+        camerasStepVisited: state.camerasStepVisited || action.step === 2,
+        teleStepVisited: state.teleStepVisited || action.step === 4,
+        recordStepVisited: state.recordStepVisited || action.step === 5,
+      };
       break;
 
     case "SET_ROBOT_MODE": {
@@ -152,11 +161,10 @@ function reducer(state: WizardState, action: Action): WizardState {
         ...state,
         detectedCameras: action.cameras,
         cameraSelections: action.cameras.map((c) => ({
-          deviceId: c.deviceId,
+          opencvIndex: c.opencvIndex,
           label: c.label,
           name: "",
           included: false,
-          opencvIndex: c.opencvIndex,
         })),
       };
       break;
@@ -169,7 +177,7 @@ function reducer(state: WizardState, action: Action): WizardState {
       next = {
         ...state,
         cameraSelections: state.cameraSelections.map((c) =>
-          c.deviceId === action.deviceId
+          c.opencvIndex === action.opencvIndex
             ? { ...c, included: action.included }
             : c
         ),
@@ -180,7 +188,7 @@ function reducer(state: WizardState, action: Action): WizardState {
       next = {
         ...state,
         cameraSelections: state.cameraSelections.map((c) =>
-          c.deviceId === action.deviceId ? { ...c, name: action.name } : c
+          c.opencvIndex === action.opencvIndex ? { ...c, name: action.name } : c
         ),
       };
       break;

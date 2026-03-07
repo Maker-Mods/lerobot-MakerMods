@@ -334,7 +334,13 @@ function NewCalibrationPanel({
 
       {/* ── Error ── */}
       {calState.error && (
-        <DevErrorPanel error={new Error(calState.error)} />
+        <div className="space-y-2">
+          <DevErrorPanel error={new Error(calState.error)} />
+          <p className="text-xs text-muted-foreground px-1">
+            This error usually means the arm is not powered on. Make sure the
+            motor power supply is connected and switched on, then try again.
+          </p>
+        </div>
       )}
     </div>
   );

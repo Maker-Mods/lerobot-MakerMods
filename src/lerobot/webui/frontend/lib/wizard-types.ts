@@ -8,20 +8,18 @@ export interface PortInfo {
   hwid: string | null;
 }
 
-// Camera info from browser MediaDevices API
+// Camera info from backend OpenCV detection (ground truth indices)
 export interface CameraInfo {
-  deviceId: string;
-  label: string;
-  opencvIndex: number; // position in the full videoinput device list = OpenCV index
+  opencvIndex: number; // OpenCV camera index (from backend, ground truth)
+  label: string;       // Camera name from system_profiler or fallback
 }
 
 // Camera selection in wizard
 export interface CameraSelection {
-  deviceId: string;
-  label: string; // original device label for display
-  name: string; // "front_cam" | "hand_cam" | "side_cam"
+  opencvIndex: number; // OpenCV camera index (key, ground truth from backend)
+  label: string;       // display label
+  name: string;        // "front_cam" | "hand_cam" | "side_cam"
   included: boolean;
-  opencvIndex: number; // actual OpenCV camera index (preserved from full device list)
 }
 
 // Recording configuration
@@ -32,6 +30,9 @@ export interface RecordingConfig {
   episodeTimeS: number;
   resetTimeS: number;
   displayData: boolean;
+  cameraFps: number;
+  cameraWidth: number;
+  cameraHeight: number;
 }
 
 // API start response
@@ -53,6 +54,7 @@ export interface WizardState {
   portAssignments: Record<string, string>; // role → port path
 
   // Step 2: Cameras
+  camerasStepVisited: boolean;
   detectedCameras: CameraInfo[];
   cameraSelections: CameraSelection[];
 
@@ -62,9 +64,11 @@ export interface WizardState {
   newCalibrationNames: Record<string, string>; // role → user-entered name for new calibration
 
   // Step 4: Teleoperation
+  teleStepVisited: boolean;
   teleProcessId: string | null;
 
   // Step 5: Recording
+  recordStepVisited: boolean;
   recordingConfig: RecordingConfig;
   recordProcessId: string | null;
 }
@@ -119,6 +123,9 @@ export const INITIAL_RECORDING_CONFIG: RecordingConfig = {
   episodeTimeS: 60,
   resetTimeS: 10,
   displayData: true,
+  cameraFps: 30,
+  cameraWidth: 640,
+  cameraHeight: 480,
 };
 
 export const INITIAL_STATE: WizardState = {
@@ -127,12 +134,15 @@ export const INITIAL_STATE: WizardState = {
   robotMode: null,
   detectedPorts: [],
   portAssignments: {},
+  camerasStepVisited: false,
   detectedCameras: [],
   cameraSelections: [],
   calibrationFiles: {},
   calibrationSelections: {},
   newCalibrationNames: {},
+  teleStepVisited: false,
   teleProcessId: null,
+  recordStepVisited: false,
   recordingConfig: { ...INITIAL_RECORDING_CONFIG },
   recordProcessId: null,
 };

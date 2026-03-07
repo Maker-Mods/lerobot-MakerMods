@@ -93,40 +93,36 @@ class CameraScannerService:
     def list_cameras(self, max_cameras: int = 10, exclude_builtin: bool = False) -> List[CameraInfo]:
         """List all available OpenCV cameras.
 
+        Uses system_profiler only to know the total camera count (to avoid noisy
+        "out of bound" errors from OpenCV), but does NOT rely on its ordering
+        for naming or filtering — system_profiler order does not always match
+        OpenCV index order.
+
         Args:
             max_cameras: Maximum number of camera indices to check.
-            exclude_builtin: If True, only return external USB cameras (macOS only).
+            exclude_builtin: Ignored (kept for API compat). Filtering is done
+                by the user in the frontend via MJPEG previews.
 
         Returns:
             List of CameraInfo objects for detected cameras.
         """
+        # Use system_profiler count to limit scan range (avoids "out of bound" errors)
         system_cameras = self._get_system_camera_info()
+        scan_limit = len(system_cameras) if system_cameras else max_cameras
+
         cameras = []
 
-        for index in range(max_cameras):
+        for index in range(scan_limit):
             cap = cv2.VideoCapture(index)
 
             if cap.isOpened():
-                # Use system_profiler name if available (same ordering as OpenCV indices)
-                is_external = True
-                if index < len(system_cameras):
-                    cam_info = system_cameras[index]
-                    camera_name = cam_info.get("_name", f"Camera {index}")
-                    is_external = self._is_external_camera(cam_info)
-                else:
-                    camera_name = f"Camera {index}"
-
                 cap.release()
-
-                if exclude_builtin and not is_external:
-                    continue
-
                 cameras.append(
                     CameraInfo(
                         index=index,
-                        name=camera_name,
+                        name=f"Camera {index}",
                         backend="opencv",
-                        is_builtin=not is_external,
+                        is_builtin=False,
                     )
                 )
 

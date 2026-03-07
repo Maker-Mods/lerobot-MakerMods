@@ -82,6 +82,12 @@ The frontend is a single-page wizard with 6 sequential steps. One centered card 
 
 ## Changelog
 
+### 2026-03-07
+- **Feature: Configurable camera FPS and resolution** — Added FPS and resolution dropdowns to the Record step with recommended defaults (30 fps, 640×480). Options: FPS 15/24/30/60, resolution 320×240/640×480/1280×720/1920×1080. Values flow through `saveConfig` to the backend camera config instead of being hardcoded.
+  - Modified: `frontend/lib/wizard-types.ts` (added `cameraFps`, `cameraWidth`, `cameraHeight` to `RecordingConfig`)
+  - Modified: `frontend/components/wizard/steps/record-step.tsx` (camera settings UI)
+  - Modified: `frontend/lib/services.ts` (pass configurable values in `saveConfig`)
+
 ### 2026-03-03
 - **Feature: Recording step enhancements** — Major UX overhaul of the recording step (Step 6):
   1. **Recording phase status banner** — Parses `lerobot-record` log output to detect current phase (`recording`, `resetting`, `encoding`, `done`) and shows a contextual status card with phase-appropriate icon, message, and stop button. Recognises: `"Recording episode N"`, `"Reset the environment"`, `"Encoding videos"`, `"Stop recording"`.
