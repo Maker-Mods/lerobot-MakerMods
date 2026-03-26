@@ -118,12 +118,14 @@ This fork uses the **LeRobot Dataset v3** format.
 
 ### Prerequisites
 
-- **Platform**: x86/x64 (Intel/AMD)
+- **Platform**: x86/x64 (Intel/AMD) or ARM (Jetson Nano)
 - **OS**: Ubuntu 20.04 or later
 - **Python**: 3.10
 - **Hardware**: SO-101 bimanual robot arms
 
 ### 1. Install Miniconda
+
+#### x86/x64 (Intel/AMD)
 
 ```bash
 # Download Miniconda installer
@@ -131,6 +133,19 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
 # Run the installer
 bash Miniconda3-latest-Linux-x86_64.sh
+
+# Restart your terminal after installation, then verify
+conda --version
+```
+
+#### Jetson Nano (ARM)
+
+```bash
+# Download the ARM version of Miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh
+
+# Run the installer
+bash Miniconda3-latest-Linux-aarch64.sh
 
 # Restart your terminal after installation, then verify
 conda --version
@@ -166,7 +181,7 @@ conda install -c conda-forge ffmpeg
 ### 4. Clone the Repository
 
 ```bash
-git clone https://github.com/kahowang/lerobot.git
+git clone https://github.com/Maker-Mods/lerobot-MakerMods.git
 cd lerobot
 ```
 
@@ -177,6 +192,12 @@ Install LeRobot with Feetech motor support:
 ```bash
 # Install with feetech motor support (required for SO-101 robots)
 pip install -e ".[feetech]"
+```
+
+**If the install is too slow in China**, use the Aliyun mirror instead:
+
+```bash
+pip install -e ".[feetech]" -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 ```
 
 ### 6. Install SmolVLA Dependencies
