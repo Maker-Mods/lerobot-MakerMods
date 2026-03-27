@@ -215,6 +215,67 @@ This will install:
 - `accelerate` for distributed training
 - `safetensors` for model serialization
 
+### 7. (Jetson Only) Install PyTorch with CUDA Support
+
+By default, `pip install` pulls a CPU-only PyTorch wheel on Jetson (aarch64). For GPU-accelerated inference, you must install NVIDIA's Jetson-specific PyTorch wheel.
+
+**Check your current install:**
+```bash
+python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_available())"
+```
+
+If it shows `+cpu` or `CUDA: False`, follow the steps below.
+
+**Step 1: Uninstall CPU-only PyTorch**
+```bash
+pip uninstall -y torch torchvision torchaudio
+```
+
+**Step 2: Install from the Jetson AI Lab pip index**
+
+For JetPack 6.x with CUDA 12.6:
+```bash
+pip install torch==2.8.0 torchvision==0.23.0 --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+```
+
+> **Note:** These wheels are ~226 MB and the server can be slow. If `pip` times out, download the wheel on a faster machine and transfer it:
+> ```bash
+> # On a faster machine
+> curl -o torch-2.8.0-cp310-cp310-linux_aarch64.whl \
+>   "https://pypi.jetson-ai-lab.io/jp6/cu126/%2Bf/62a/1beee9f2f1470/torch-2.8.0-cp310-cp310-linux_aarch64.whl"
+> scp torch-2.8.0-cp310-cp310-linux_aarch64.whl user@<JETSON_IP>:~/
+>
+> # On the Jetson
+> pip install ~/torch-2.8.0-cp310-cp310-linux_aarch64.whl
+> pip install torchvision==0.23.0 --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+> ```
+
+**Step 3: Update lerobot version pins**
+
+`torch 2.8.0` and `torchvision 0.23.0` are slightly above lerobot's default upper bounds. In `pyproject.toml`, update:
+```toml
+"torch>=2.2.1,<2.9.0",
+"torchvision>=0.21.0,<0.24.0",
+```
+
+Then reinstall lerobot:
+```bash
+pip install -e ".[feetech]"
+```
+
+**Step 4: Verify**
+```bash
+python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda)"
+```
+
+Should show `CUDA: True` and `CUDA version: 12.6`.
+
+**Compatibility matrix:**
+
+| JetPack | CUDA | Index URL | torch | torchvision |
+|---------|------|-----------|-------|-------------|
+| 6.x     | 12.6 | `https://pypi.jetson-ai-lab.io/jp6/cu126` | 2.8.0 | 0.23.0 |
+
 ---
 
 ## Usage
